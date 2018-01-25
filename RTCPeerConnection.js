@@ -7,6 +7,7 @@ import * as RTCUtil from './RTCUtil';
 import MediaStream from './MediaStream';
 import MediaStreamEvent from './MediaStreamEvent';
 import MediaStreamTrack from './MediaStreamTrack';
+import MediaStreamTrackEvent from './MediaStreamTrackEvent';
 import RTCDataChannel from './RTCDataChannel';
 import RTCDataChannelEvent from './RTCDataChannelEvent';
 import RTCSessionDescription from './RTCSessionDescription';
@@ -96,6 +97,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
 
   onaddstream: ?Function;
   onremovestream: ?Function;
+  ontrack: ?Function;
 
   _peerConnectionId: number;
   _remoteStreams: Array<MediaStream> = [];
@@ -114,11 +116,13 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
         DEFAULT_PC_CONSTRAINTS,
         this._peerConnectionId);
     this._registerEvents();
+
     // Allow for legacy callback usage
+    this.addEventListener('track', (e) => this.ontrack(e));
     this.createOffer = withLegacyCallbacks(this.createOffer.bind(this), true);
     this.createAnswer = withLegacyCallbacks(this.createAnswer.bind(this), true);
     this.setLocalDescription = withLegacyCallbacks(this.setLocalDescription.bind(this), false, 1, 2);
-    this.setRemoteDescription = withLegacyCallbacks(this.setRemoteDescription.bind(this));
+    this.setRemoteDescription = withLegacyCallbacks(this.shimmedSetRemoteDescription.bind(this));
     this.addIceCandidate = withLegacyCallbacks(this.addIceCandidate.bind(this));
     this.getStats = withLegacyCallbacks(this.getStats.bind(this));
   }
@@ -159,7 +163,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
     });
   }
 
-  setRemoteDescription(sessionDescription: RTCSessionDescription) {
+  origSetRemoteDescription(sessionDescription: RTCSessionDescription) {
     return WebRTCModule.peerConnectionSetRemoteDescription(
       sessionDescription.toJSON(),
       this._peerConnectionId
@@ -167,6 +171,31 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
       this.remoteDescription = sessionDescription;
       return;
     });
+  }
+
+  shimmedSetRemoteDescription(sessionDescription: RTCSessionDescription) {
+    const ontrackpoly =  (e: MediaStreamEvent) => {
+        e.stream.addEventListener('addtrack', (te: MediaStreamTrackEvent) => {
+          const receiver = {track: te.track};
+          const event = new Event('track');
+          event.track = te.track;
+          event.receiver = receiver;
+          event.transceiver = {receiver};
+          event.streams = [e.stream];
+          this.dispatchEvent(event);
+        });
+        e.stream.getTracks().forEach((track: MediaStreamTrack) => {
+          const receiver = {track};
+          const event = new Event('track');
+          event.track = track;
+          event.receiver = receiver;
+          event.transceiver = {receiver};
+          event.streams = [e.stream];
+          this.dispatchEvent(event);
+        });
+    };
+    this.addEventListener('addstream', ontrackpoly);
+    return this.origSetRemoteDescription(sessionDescription);
   }
 
   addIceCandidate(candidate) { // TODO: success, failure
