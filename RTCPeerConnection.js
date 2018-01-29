@@ -177,7 +177,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
     const ontrackpoly =  (e: MediaStreamEvent) => {
         e.stream.addEventListener('addtrack', (te: MediaStreamTrackEvent) => {
           const receiver = {track: te.track};
-          const event = new Event('track');
+          const event = new MediaStreamEvent('track');
           event.track = te.track;
           event.receiver = receiver;
           event.transceiver = {receiver};
@@ -186,7 +186,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
         });
         e.stream.getTracks().forEach((track: MediaStreamTrack) => {
           const receiver = {track};
-          const event = new Event('track');
+          const event = new MediaStreamEvent('track');
           event.track = track;
           event.receiver = receiver;
           event.transceiver = {receiver};
