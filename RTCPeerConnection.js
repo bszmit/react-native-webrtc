@@ -118,7 +118,6 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
     this._registerEvents();
 
     // Allow for legacy callback usage
-    this.addEventListener('track', (e) => this.ontrack(e));
     this.createOffer = withLegacyCallbacks(this.createOffer.bind(this), true);
     this.createAnswer = withLegacyCallbacks(this.createAnswer.bind(this), true);
     this.setLocalDescription = withLegacyCallbacks(this.setLocalDescription.bind(this), false, 1, 2);
@@ -175,7 +174,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
 
   shimmedSetRemoteDescription(sessionDescription: RTCSessionDescription) {
     const ontrackpoly =  (e: MediaStreamEvent) => {
-        e.stream.addEventListener('addtrack', (te: MediaStreamTrackEvent) => {
+        e.stream.addEventListener('trackAddedAndPersisted', (te: MediaStreamTrackEvent) => {
           const receiver = {track: te.track};
           const event = new MediaStreamEvent('track');
           event.track = te.track;
@@ -250,6 +249,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
 
   _registerEvents(): void {
     this._subscriptions = [
+      this.addEventListener('track', (e) => this.ontrack(e)),
       DeviceEventEmitter.addListener('peerConnectionOnRenegotiationNeeded', ev => {
         if (ev.id !== this._peerConnectionId) {
           return;
@@ -285,6 +285,7 @@ export default class RTCPeerConnection extends EventTarget(PEER_CONNECTION_EVENT
         }
         this._remoteStreams.push(stream);
         this.dispatchEvent(new MediaStreamEvent('addstream', {stream}));
+        tracks.forEach((track) => this.dispatchEvent(new MediaStreamTrackEvent('trackAddedAndPersisted', {track})));
       }),
       DeviceEventEmitter.addListener('peerConnectionRemovedStream', ev => {
         if (ev.id !== this._peerConnectionId) {
